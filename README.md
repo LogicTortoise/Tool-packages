@@ -53,9 +53,17 @@ Tool-packages/
 - 查询账户余额和持仓
 - 自动买入/卖出股票
 - 管理委托订单和撤单
+- 自选股管理（添加、删除、搜索）
+- 从自选股快速交易
 - 支持策略自动化
 
-**技术栈**: Python + uiautomator2 + ADB + EasyOCR
+**技术栈**: Python + uiautomator2 + ADB + cnocr (中文OCR)
+
+**架构特点**:
+- 使用 mobileas 启发的 Device 类进行连接管理
+- 稳定的 u2.connect_usb() 连接方式
+- 自动重试机制和错误处理
+- 解决 BlueStacks/模拟器兼容性问题
 
 ---
 

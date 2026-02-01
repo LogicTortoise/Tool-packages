@@ -1,6 +1,6 @@
 ---
 name: thstrader
-description: "Automate stock trading operations on TongHuaShun (同花顺) mobile app for simulated trading. Use when working with stock trading tasks including: (1) Query account balance and positions, (2) Buy or sell stocks, (3) Manage pending orders and cancellations, (4) Manage favorite stocks (add/remove/search), (5) Trade from favorites using stock names instead of codes, (6) Automate trading strategies. Supports pinyin search for Chinese stock names. Works with Android emulator (BlueStacks) via ADB and uiautomator2."
+description: "Automate stock trading operations on TongHuaShun (同花顺) mobile app for simulated trading. Use when working with stock trading tasks including: (1) Query account balance and positions, (2) Buy or sell stocks, (3) Manage pending orders and cancellations, (4) Manage favorite stocks (add/remove/search using pinyin initials), (5) Trade from favorites using pinyin initials instead of codes, (6) Automate trading strategies. Supports pinyin initial search (e.g., 'hkws' for 海康威视). Works with Android emulator (BlueStacks) via ADB and uiautomator2. Features stable Device architecture and cnocr Chinese OCR."
 ---
 
 # THS Trader - 同花顺自动交易
@@ -159,13 +159,15 @@ if result['success']:
 
 ### 6. Manage Favorite Stocks
 
-**Add to favorites** (uses pinyin search):
+**Add to favorites** (uses pinyin initials):
 ```bash
-python trader.py add-favorite --name 海康威视
+python trader.py add-favorite --pinyin hkws   # 海康威视
+python trader.py add-favorite --pinyin xfetf  # 消费ETF
 ```
 
 ```python
-result = trader.add_favorite("海康威视")
+# Use pinyin initials: hkws = 海康威视, xfetf = 消费ETF
+result = trader.add_favorite("hkws")
 
 if result['success']:
     print(f"Added to favorites, code: {result.get('stock_code', 'N/A')}")
@@ -173,11 +175,11 @@ if result['success']:
 
 **Remove from favorites**:
 ```bash
-python trader.py remove-favorite --name 海康威视
+python trader.py remove-favorite --pinyin hkws
 ```
 
 ```python
-result = trader.remove_favorite("海康威视")
+result = trader.remove_favorite("hkws")
 
 if result['success']:
     print("Removed from favorites")
@@ -185,11 +187,11 @@ if result['success']:
 
 **Get stock code from favorites**:
 ```bash
-python trader.py get-code --name 海康威视
+python trader.py get-code --pinyin hkws
 ```
 
 ```python
-result = trader.get_favorite_code("海康威视")
+result = trader.get_favorite_code("hkws")
 
 if result['success']:
     print(f"Stock code: {result['stock_code']}")
@@ -197,16 +199,16 @@ if result['success']:
 
 ### 7. Trade from Favorites
 
-Trade using Chinese stock names instead of codes:
+Trade using pinyin initials instead of stock codes:
 
 **Buy from favorites**:
 ```bash
-python trader.py buy-favorite --name 海康威视 --amount 1000 --price 31.5
+python trader.py buy-favorite --pinyin hkws --amount 1000 --price 31.5
 ```
 
 ```python
-# No need to remember stock code
-result = trader.buy_from_favorite("海康威视", 1000, 31.5)
+# No need to remember stock code, use pinyin initials
+result = trader.buy_from_favorite("hkws", 1000, 31.5)  # 海康威视
 
 if result['success']:
     print(f"Buy order submitted: {result['msg']}")
@@ -214,21 +216,26 @@ if result['success']:
 
 **Sell from favorites**:
 ```bash
-python trader.py sell-favorite --name 海康威视 --amount 500 --price 32.0
+python trader.py sell-favorite --pinyin hkws --amount 500 --price 32.0
 ```
 
 ```python
-result = trader.sell_from_favorite("海康威视", 500, 32.0)
+result = trader.sell_from_favorite("hkws", 500, 32.0)
 
 if result['success']:
     print(f"Sell order submitted: {result['msg']}")
 ```
 
 **How it works**:
-1. Converts Chinese name to pinyin initials (e.g., 海康威视 → hkws)
-2. Searches favorites using pinyin
-3. Retrieves stock code via OCR
-4. Executes trade using the code
+1. Searches favorites using pinyin initials (e.g., hkws = 海康威视)
+2. Retrieves stock code via OCR (cnocr for Chinese text)
+3. Executes trade using the code
+
+**Common pinyin initials**:
+- hkws = 海康威视
+- xfetf = 消费ETF
+- thsn = 同花顺
+- gzmt = 贵州茅台
 
 ## Common Patterns
 
@@ -286,16 +293,20 @@ for w in withdrawals:
 ### Build Watchlist and Trade
 
 ```python
-# Build a watchlist of favorite stocks
-stocks_to_watch = ["海康威视", "同花顺", "贵州茅台"]
+# Build a watchlist of favorite stocks using pinyin initials
+stocks_to_watch = [
+    ("hkws", "海康威视"),
+    ("thsn", "同花顺"),
+    ("gzmt", "贵州茅台"),
+]
 
-for name in stocks_to_watch:
-    result = trader.add_favorite(name)
-    print(f"Added {name}: {result['msg']}")
+for pinyin, name in stocks_to_watch:
+    result = trader.add_favorite(pinyin)
+    print(f"Added {name} ({pinyin}): {result['msg']}")
 
-# Trade directly from favorites using names
-trader.buy_from_favorite("海康威视", 1000, 31.5)
-trader.buy_from_favorite("同花顺", 100, 350.0)
+# Trade directly from favorites using pinyin initials
+trader.buy_from_favorite("hkws", 1000, 31.5)   # 海康威视
+trader.buy_from_favorite("thsn", 100, 350.0)   # 同花顺
 
 # No need to remember stock codes!
 ```
@@ -303,16 +314,16 @@ trader.buy_from_favorite("同花顺", 100, 350.0)
 ### Batch Trade from Favorites
 
 ```python
-# Trade multiple stocks using Chinese names
+# Trade multiple stocks using pinyin initials
 favorite_trades = [
-    ("海康威视", 1000, 31.5),
-    ("同花顺", 100, 350.0),
-    ("贵州茅台", 10, 1800.0),
+    ("hkws", 1000, 31.5),    # 海康威视
+    ("thsn", 100, 350.0),    # 同花顺
+    ("gzmt", 10, 1800.0),    # 贵州茅台
 ]
 
-for name, amount, price in favorite_trades:
-    result = trader.buy_from_favorite(name, amount, price)
-    print(f"{name}: {result['msg']}")
+for pinyin, amount, price in favorite_trades:
+    result = trader.buy_from_favorite(pinyin, amount, price)
+    print(f"{pinyin}: {result['msg']}")
 ```
 
 ## References
@@ -362,8 +373,9 @@ All trading operations auto-save screenshots to current directory for verificati
 
 - Uses **Resource ID** + **XPath** + **coordinate clicking**
 - Automatically handles "App not responding" dialogs
-- OCR (EasyOCR) for reading position and pending order details
+- OCR (cnocr) for reading position and pending order details - optimized for Chinese text
 - First-time OCR model download may take several minutes
+- **Stable Device architecture** inspired by mobileas - better emulator compatibility
 
 ### Device Connection
 

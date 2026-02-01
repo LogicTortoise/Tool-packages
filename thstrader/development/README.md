@@ -15,17 +15,18 @@
 - ✅ **撤单** - 取消指定的委托订单
 
 ### 自选股管理 🆕
-- ✅ **添加自选股** - 输入中文名称，按拼音首字母搜索并添加
+- ✅ **添加自选股** - 输入拼音首字母搜索并添加（如 "hkws" 代表海康威视）
 - ✅ **移除自选股** - 从自选中移除指定股票
 - ✅ **获取股票代码** - 从自选区查询股票代码
-- ✅ **从自选区买入** - 直接使用股票名称买入（无需代码）
-- ✅ **从自选区卖出** - 直接使用股票名称卖出（无需代码）
+- ✅ **从自选区买入** - 直接使用拼音首字母买入（无需代码）
+- ✅ **从自选区卖出** - 直接使用拼音首字母卖出（无需代码）
 
 ### 辅助功能
 - 📸 **自动截图** - 每次交易自动保存截图记录
-- 🔍 **OCR 识别** - 使用 EasyOCR 识别持仓和撤单信息
+- 🔍 **OCR 识别** - 使用 cnocr 识别持仓和撤单信息（针对中文优化）
 - 🛡️ **二次确认** - 买入/卖出前自动验证订单信息
-- 🔤 **拼音搜索** - 支持中文股票名称拼音首字母快速搜索
+- 🔤 **拼音搜索** - 支持拼音首字母快速搜索股票
+- 🔌 **稳定连接** - 使用 mobileas 启发的连接架构，解决模拟器兼容性问题
 
 ## 环境要求
 
@@ -111,20 +112,20 @@ python trader.py withdrawals
 # 撤单
 python trader.py cancel --name 海康威视 --type 买入 --amount 1000 --price 10.0
 
-# 添加自选股
-python trader.py add-favorite --name 海康威视
+# 添加自选股（使用拼音首字母）
+python trader.py add-favorite --pinyin hkws   # 海康威视
 
 # 移除自选股
-python trader.py remove-favorite --name 海康威视
+python trader.py remove-favorite --pinyin xfetf  # 消费ETF
 
 # 获取自选股代码
-python trader.py get-code --name 海康威视
+python trader.py get-code --pinyin hkws
 
-# 从自选区买入（无需股票代码）
-python trader.py buy-favorite --name 海康威视 --amount 1000 --price 31.5
+# 从自选区买入（使用拼音首字母，无需股票代码）
+python trader.py buy-favorite --pinyin hkws --amount 1000 --price 31.5
 
-# 从自选区卖出（无需股票代码）
-python trader.py sell-favorite --name 海康威视 --amount 500 --price 32.0
+# 从自选区卖出（使用拼音首字母，无需股票代码）
+python trader.py sell-favorite --pinyin hkws --amount 500 --price 32.0
 
 # 指定设备
 python trader.py balance --device 127.0.0.1:5565
@@ -171,28 +172,28 @@ result = trader.withdraw("海康威视", "买入", 1000, 10.0)
 if result['success']:
     print("撤单成功")
 
-# 添加自选股
-result = trader.add_favorite("海康威视")
+# 添加自选股（使用拼音首字母）
+result = trader.add_favorite("hkws")  # 海康威视
 if result['success']:
     print(f"添加成功，股票代码: {result.get('stock_code', '未获取')}")
 
 # 移除自选股
-result = trader.remove_favorite("海康威视")
+result = trader.remove_favorite("xfetf")  # 消费ETF
 if result['success']:
     print("移除成功")
 
 # 获取自选股代码
-result = trader.get_favorite_code("海康威视")
+result = trader.get_favorite_code("hkws")
 if result['success']:
     print(f"股票代码: {result['stock_code']}")
 
-# 从自选区买入（无需代码）
-result = trader.buy_from_favorite("海康威视", 1000, 31.5)
+# 从自选区买入（使用拼音首字母，无需代码）
+result = trader.buy_from_favorite("hkws", 1000, 31.5)
 if result['success']:
     print(f"买入成功: {result['msg']}")
 
-# 从自选区卖出（无需代码）
-result = trader.sell_from_favorite("海康威视", 500, 32.0)
+# 从自选区卖出（使用拼音首字母，无需代码）
+result = trader.sell_from_favorite("hkws", 500, 32.0)
 if result['success']:
     print(f"卖出成功: {result['msg']}")
 ```
@@ -201,16 +202,42 @@ if result['success']:
 
 ```
 THSTrader-skill/
-├── README.md              # 项目文档
-├── requirements.txt       # Python 依赖
-├── trader.py             # CLI 入口
-└── ths/                  # 核心模块
-    ├── __init__.py       # 模块初始化
-    ├── config.py         # UI 元素配置
-    └── trader.py         # Trader 核心类
+├── README.md                # 项目文档
+├── requirements.txt         # Python 依赖
+├── trader.py               # CLI 入口
+├── test_all_features.py    # 完整功能测试脚本
+├── install_u2.py           # uiautomator2 安装工具
+└── ths/                    # 核心模块
+    ├── __init__.py         # 模块初始化
+    ├── config.py           # UI 元素配置
+    ├── device.py           # Device 连接管理类
+    └── trader.py           # Trader 核心类
 ```
 
 ## 技术实现
+
+### Device 连接管理架构
+
+使用 mobileas 启发的 Device 类进行连接管理：
+
+```python
+class Device:
+    def __init__(self, serial):
+        # 使用 u2.connect_usb() 提供更稳定的连接
+        if serial.startswith('127.0.0.1:'):
+            self._device = u2.connect_usb(serial)
+        else:
+            self._device = u2.connect(serial)
+
+        # 设置 7 天超时保持连接
+        self._device.set_new_command_timeout(604800)
+```
+
+**优势**：
+- ✅ 解决 BlueStacks/模拟器的 InvalidVersion 问题
+- ✅ 更稳定的长时间连接
+- ✅ 自动重试机制
+- ✅ 统一的错误处理
 
 ### UI 元素定位方式
 
@@ -231,7 +258,7 @@ THSTrader-skill/
 
 ### OCR 文字识别
 
-使用 EasyOCR 识别持仓和撤单列表：
+使用 cnocr (中文OCR) 识别持仓和撤单列表：
 
 ```python
 # 截图持仓项
@@ -240,9 +267,9 @@ self.d.xpath('...').screenshot().save("tmp.png")
 # 裁剪股票名称区域
 Image.open("tmp.png").crop((11, 11, 165, 55)).save("tmp.png")
 
-# OCR 识别
-result = self.reader.readtext("tmp.png")
-stock_name = result[0][1]
+# OCR 识别（cnocr 针对中文优化）
+result = self.reader.ocr_for_single_line("tmp.png")
+stock_name = ''.join(result)
 ```
 
 ### 核心流程
@@ -281,8 +308,9 @@ stock_name = result[0][1]
    - 默认用于模拟炒股，扩展到实盘需要修改代码
 
 3. **OCR 性能**
-   - 首次初始化 EasyOCR 较慢（下载模型）
+   - 首次初始化 cnocr 较慢（下载模型）
    - 持仓和撤单列表查询速度受 OCR 影响
+   - cnocr 针对中文优化，识别准确率更高
 
 4. **交易规则**
    - A股 T+1 规则：当天买入的股票，第二天才能卖出
@@ -313,10 +341,22 @@ adb connect 127.0.0.1:5565
 ### Q3: OCR 识别失败
 
 ```bash
-# 重新安装 easyocr
-pip uninstall easyocr
-pip install easyocr
+# 重新安装 cnocr
+pip uninstall cnocr
+pip install cnocr
 ```
+
+### Q5: uiautomator2 连接失败
+
+```bash
+# 使用 install_u2.py 重新安装 uiautomator2
+python install_u2.py
+```
+
+这会自动：
+- 安装 uiautomator2 APK 到模拟器
+- 移除可能导致问题的 minicap
+- 修复版本检查问题
 
 ### Q4: 买入/卖出失败
 
@@ -324,6 +364,24 @@ pip install easyocr
 - `buy_<股票代码>_before.png` - 买入前截图
 - `buy_<股票代码>_confirm.png` - 确认对话框
 - `buy_<股票代码>_after.png` - 买入后截图
+
+## 功能测试
+
+运行完整功能测试：
+
+```bash
+python test_all_features.py
+```
+
+测试包括：
+- ✅ 设备连接
+- ✅ 获取账户余额
+- ✅ 获取持仓列表
+- ✅ 获取可撤单列表
+- ✅ 买入/卖出功能
+- ✅ 自选股操作
+
+测试报告会显示每项功能的通过/失败状态。
 
 ## 示例脚本
 
@@ -379,8 +437,9 @@ MIT License
 ## 致谢
 
 - 原版 [THSTrader](https://github.com/nladuo/THSTrader) 作者
+- [mobileas](https://github.com/LmeSzinc/AzurLaneAutoScript) - Device 架构设计灵感
 - [uiautomator2](https://github.com/openatx/uiautomator2) 项目
-- [EasyOCR](https://github.com/JaidedAI/EasyOCR) 项目
+- [cnocr](https://github.com/breezedeus/cnocr) - 中文 OCR 识别
 
 ## 免责声明
 
