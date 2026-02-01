@@ -3,9 +3,9 @@ THSTrader 核心类
 适配新版同花顺（11.46.04）
 """
 import time
-import uiautomator2 as u2
 from PIL import Image
 from .config import UI_ELEMENTS, COORDINATES, XPATHS, APP_PACKAGE, DEFAULT_WAIT, MAX_HOLDINGS, INPUT_CLEAR_COUNT
+from .device import Device
 
 try:
     from cnocr import CnOcr
@@ -25,7 +25,10 @@ class THSTrader:
         Args:
             serial: 设备序列号，默认 127.0.0.1:5565
         """
-        self.d = u2.connect(serial)
+        # Use Device class for connection management
+        self.device = Device(serial)
+        # Expose d for compatibility with existing code
+        self.d = self.device.d
         self.serial = serial
 
         # 初始化 OCR（如果可用）
@@ -35,7 +38,7 @@ class THSTrader:
         else:
             self.reader = None
 
-        print(f"✓ 已连接到设备: {serial}")
+        print(f"✓ THSTrader 初始化完成")
 
     def get_balance(self):
         """
