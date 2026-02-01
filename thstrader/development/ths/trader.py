@@ -611,6 +611,7 @@ class THSTrader:
     def add_favorite(self, pinyin_initials):
         """
         添加自选股
+        在自选tab，点击右上角放大镜来搜索股票，然后点击+号，加入自选
 
         Args:
             pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
@@ -626,70 +627,104 @@ class THSTrader:
 
         # 返回主页
         self._back_to_moni_page()
-
-        # 点击搜索框（通常在顶部）
         self._close_dialogs()
-        time.sleep(1)
 
-        # 点击屏幕上方搜索区域（坐标需要根据实际UI调整）
-        self.d.click(360, 100)
+        # 1. 点击自选tab
+        print("点击自选tab...")
+        if self.d(text="自选").exists:
+            self.d(text="自选").click()
+        elif self.d(resourceId=UI_ELEMENTS["tab_optional"]).exists:
+            self.d(resourceId=UI_ELEMENTS["tab_optional"]).click()
+        else:
+            # 使用坐标点击自选tab（通常在底部导航栏左边第二个）
+            self.d.click(140, 1210)
         time.sleep(DEFAULT_WAIT)
 
-        # 输入拼音首字母搜索
+        # 2. 点击右上角放大镜（搜索按钮）
+        print("点击右上角搜索按钮...")
+        # 搜索按钮通常在右上角，坐标大约是 (680, 80)
+        if self.d(description="搜索").exists:
+            self.d(description="搜索").click()
+        elif self.d(text="搜索").exists:
+            self.d(text="搜索").click()
+        else:
+            # 使用坐标点击右上角搜索区域
+            self.d.click(680, 80)
+        time.sleep(DEFAULT_WAIT)
+
+        # 3. 输入拼音首字母搜索
+        print(f"输入搜索关键词: {pinyin_code}")
         self._input_text(pinyin_code)
         time.sleep(DEFAULT_WAIT)
 
-        # 获取第一个搜索结果的股票代码
+        # 4. 点击第一个搜索结果右侧的+号添加到自选
         stock_code = ""
+        stock_name = ""
         try:
-            # 尝试获取第一个搜索结果
+            # 等待搜索结果出现
+            time.sleep(1)
+
+            # 检查是否有搜索结果
             if self.d(resourceId=UI_ELEMENTS["stockname_tv"]).exists:
-                first_result = self.d.xpath(XPATHS["stock_search_result"])
+                # 获取第一个结果的股票名称和代码（用于返回）
+                try:
+                    stock_name = self.d(resourceId=UI_ELEMENTS["stockname_tv"]).get_text()
+                    if self.d(resourceId=UI_ELEMENTS["stock_code"]).exists:
+                        stock_code = self.d(resourceId=UI_ELEMENTS["stock_code"]).get_text()
+                except:
+                    pass
 
-                # 长按以显示添加自选选项
-                first_result.long_click()
-                time.sleep(2)
-
-                # 查找并点击"添加自选"按钮
-                if self.d(text="添加自选").exists:
-                    self.d(text="添加自选").click()
-                    time.sleep(1)
-                    msg = "添加成功"
+                # 查找+号按钮（通常在搜索结果右侧）
+                # 方法1: 尝试通过resource id查找
+                if self.d(resourceId=UI_ELEMENTS.get("add_optional", "add_optional")).exists:
+                    print("找到+号按钮（通过resource id）")
+                    self.d(resourceId=UI_ELEMENTS.get("add_optional", "add_optional")).click()
                     success = True
-                elif self.d(text="加自选").exists:
-                    self.d(text="加自选").click()
-                    time.sleep(1)
                     msg = "添加成功"
+                # 方法2: 尝试通过description查找
+                elif self.d(description="添加自选").exists:
+                    print("找到添加自选按钮（通过description）")
+                    self.d(description="添加自选").click()
                     success = True
+                    msg = "添加成功"
+                # 方法3: 尝试通过text查找
+                elif self.d(text="+").exists:
+                    print("找到+号按钮（通过text）")
+                    self.d(text="+").click()
+                    success = True
+                    msg = "添加成功"
+                # 方法4: 使用坐标点击搜索结果右侧的+号区域
+                # 第一个搜索结果通常在 y=200 左右，+号在右侧 x=680 左右
                 else:
-                    # 备选方案：点击第一个结果进入详情页，从那里添加自选
-                    first_result.click()
-                    time.sleep(2)
+                    print("使用坐标点击+号区域")
+                    self.d.click(680, 200)
+                    success = True
+                    msg = "添加成功（坐标方式）"
 
-                    # 查找添加自选图标或按钮
-                    if self.d(description="添加自选").exists:
-                        self.d(description="添加自选").click()
-                        time.sleep(1)
-                        msg = "添加成功"
-                        success = True
-                    else:
-                        msg = "未找到添加自选按钮"
-                        success = False
+                time.sleep(1)
 
                 # 返回
                 self.d.press("back")
                 time.sleep(1)
 
-                print(f"✓ {msg}: {stock_name}")
+                print(f"✓ {msg}: {stock_name} ({stock_code})")
                 return {'success': success, 'msg': msg, 'stock_code': stock_code}
             else:
                 msg = "未找到搜索结果"
                 print(f"✗ {msg}")
+                # 返回
+                self.d.press("back")
+                time.sleep(1)
                 return {'success': False, 'msg': msg, 'stock_code': ''}
 
         except Exception as e:
             msg = f"操作失败: {str(e)}"
             print(f"✗ {msg}")
+            import traceback
+            traceback.print_exc()
+            # 返回
+            self.d.press("back")
+            time.sleep(1)
             return {'success': False, 'msg': msg, 'stock_code': ''}
 
     def remove_favorite(self, pinyin_initials):
