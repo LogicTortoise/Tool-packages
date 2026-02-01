@@ -8,18 +8,11 @@ from PIL import Image
 from .config import UI_ELEMENTS, COORDINATES, XPATHS, APP_PACKAGE, DEFAULT_WAIT, MAX_HOLDINGS, INPUT_CLEAR_COUNT
 
 try:
-    import easyocr
+    from cnocr import CnOcr
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
-    print("警告: easyocr 未安装，OCR 功能将不可用")
-
-try:
-    from pypinyin import lazy_pinyin, Style
-    HAS_PINYIN = True
-except ImportError:
-    HAS_PINYIN = False
-    print("警告: pypinyin 未安装，拼音搜索功能将不可用")
+    print("警告: cnocr 未安装，OCR 功能将不可用")
 
 
 class THSTrader:
@@ -37,7 +30,8 @@ class THSTrader:
 
         # 初始化 OCR（如果可用）
         if HAS_OCR:
-            self.reader = easyocr.Reader(['ch_sim', 'en'])
+            # 使用 cnocr 的中文模型
+            self.reader = CnOcr()
         else:
             self.reader = None
 
@@ -506,11 +500,53 @@ class THSTrader:
         except:
             return False
 
+    def _ocr_read(self, image_path, single_line=True):
+        """
+        OCR 读取图片文本（兼容 cnocr）
+
+        Args:
+            image_path: 图片路径
+            single_line: True 为单行识别，False 为多行识别
+
+        Returns:
+            list: [(bbox, text, confidence), ...] 格式（兼容 easyocr）
+        """
+        if not self.reader:
+            return []
+
+        try:
+            if single_line:
+                # cnocr 使用 ocr_for_single_line 方法
+                result = self.reader.ocr_for_single_line(image_path)
+
+                # cnocr 返回格式: [char, char, char, ...]
+                # 转换为类似 easyocr 的格式: [(bbox, text, confidence), ...]
+                if result:
+                    text = ''.join(result)
+                    return [(None, text, 1.0)]  # bbox 和 confidence 设为默认值
+            else:
+                # 多行识别：使用 ocr 方法
+                result = self.reader.ocr(image_path)
+
+                # cnocr.ocr() 返回格式: [[char, char, ...], [char, char, ...], ...]
+                # 转换为类似 easyocr 的格式
+                formatted_result = []
+                for line in result:
+                    if line:
+                        text = ''.join(line)
+                        formatted_result.append((None, text, 1.0))
+                return formatted_result
+        except Exception as e:
+            print(f"OCR 识别失败: {e}")
+            return []
+
+        return []
+
     def _ocr_get_full_text(self):
         """OCR 识别全部文本"""
         if not self.reader:
             return ""
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         text = ""
         for line in result:
             text += line[1]
@@ -522,15 +558,15 @@ class THSTrader:
             return {}
 
         Image.open(path).crop((11, 11, 165, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_name = result[0][1] if result else "未知"
 
         Image.open(path).crop((419, 11, 548, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_count = result[0][1] if result else "0"
 
         Image.open(path).crop((419, 60, 548, 102)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_available = result[0][1] if result else "0"
 
         return {
@@ -545,19 +581,19 @@ class THSTrader:
             return {}
 
         Image.open(path).crop((11, 11, 165, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_name = result[0][1] if result else "未知"
 
         Image.open(path).crop((219, 11, 390, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_price = result[0][1] if result else "0"
 
         Image.open(path).crop((419, 11, 548, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         stock_count = result[0][1] if result else "0"
 
         Image.open(path).crop((589, 11, 704, 55)).save("tmp.png")
-        result = self.reader.readtext("tmp.png")
+        result = self._ocr_read("tmp.png")
         t = result[0][1] if result else "未知"
 
         return {
@@ -569,24 +605,21 @@ class THSTrader:
 
     # ==================== 自选股功能 ====================
 
-    def add_favorite(self, stock_name):
+    def add_favorite(self, pinyin_initials):
         """
         添加自选股
 
         Args:
-            stock_name: 股票中文名称，如 "海康威视"
+            pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
 
         Returns:
             dict: {'success': bool, 'msg': str, 'stock_code': str}
         """
-        if not HAS_PINYIN:
-            return {'success': False, 'msg': 'pypinyin 未安装', 'stock_code': ''}
+        print(f"\n添加自选股: {pinyin_initials}")
 
-        print(f"\n添加自选股: {stock_name}")
-
-        # 获取拼音首字母
-        pinyin_code = self._get_pinyin_initials(stock_name)
-        print(f"拼音首字母: {pinyin_code}")
+        # 转换为小写
+        pinyin_code = pinyin_initials.lower()
+        print(f"搜索: {pinyin_code}")
 
         # 返回主页
         self._back_to_moni_page()
@@ -656,23 +689,20 @@ class THSTrader:
             print(f"✗ {msg}")
             return {'success': False, 'msg': msg, 'stock_code': ''}
 
-    def remove_favorite(self, stock_name):
+    def remove_favorite(self, pinyin_initials):
         """
         移除自选股
 
         Args:
-            stock_name: 股票中文名称，如 "海康威视"
+            pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
 
         Returns:
             dict: {'success': bool, 'msg': str}
         """
-        if not HAS_PINYIN:
-            return {'success': False, 'msg': 'pypinyin 未安装'}
+        print(f"\n移除自选股: {pinyin_initials}")
 
-        print(f"\n移除自选股: {stock_name}")
-
-        # 获取拼音首字母
-        pinyin_code = self._get_pinyin_initials(stock_name)
+        # 转换为小写
+        pinyin_code = pinyin_initials.lower()
 
         # 导航到自选页面
         self._navigate_to_favorites()
@@ -734,23 +764,23 @@ class THSTrader:
             print(f"✗ {msg}")
             return {'success': False, 'msg': msg}
 
-    def get_favorite_code(self, stock_name):
+    def get_favorite_code(self, pinyin_initials):
         """
         从自选区获取股票代码
 
         Args:
-            stock_name: 股票中文名称，如 "海康威视"
+            pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
 
         Returns:
             dict: {'success': bool, 'stock_code': str, 'msg': str}
         """
-        if not HAS_PINYIN or not self.reader:
-            return {'success': False, 'stock_code': '', 'msg': '缺少必要库'}
+        if not self.reader:
+            return {'success': False, 'stock_code': '', 'msg': 'OCR 未初始化'}
 
-        print(f"\n从自选区获取股票代码: {stock_name}")
+        print(f"\n从自选区获取股票代码: {pinyin_initials}")
 
-        # 获取拼音首字母
-        pinyin_code = self._get_pinyin_initials(stock_name)
+        # 转换为小写
+        pinyin_code = pinyin_initials.lower()
 
         # 导航到自选页面
         self._navigate_to_favorites()
@@ -762,12 +792,12 @@ class THSTrader:
 
             # 使用OCR识别股票名称和代码
             if self.reader:
-                result = self.reader.readtext("favorites.png")
+                result = self._ocr_read("favorites.png", single_line=False)
 
-                # 在OCR结果中查找匹配的股票名称
+                # 在OCR结果中查找匹配的拼音首字母
                 for i, item in enumerate(result):
                     text = item[1]
-                    if stock_name in text or pinyin_code.upper() in text.upper():
+                    if pinyin_code.upper() in text.upper():
                         # 尝试在附近找到股票代码（6位数字）
                         for j in range(max(0, i-2), min(len(result), i+3)):
                             code_text = result[j][1]
@@ -792,12 +822,12 @@ class THSTrader:
             print(f"✗ {msg}")
             return {'success': False, 'stock_code': '', 'msg': msg}
 
-    def buy_from_favorite(self, stock_name, amount, price):
+    def buy_from_favorite(self, pinyin_initials, amount, price):
         """
         从自选区买入股票
 
         Args:
-            stock_name: 股票中文名称
+            pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
             amount: 买入数量
             price: 买入价格
 
@@ -805,22 +835,22 @@ class THSTrader:
             dict: {'success': bool, 'msg': str}
         """
         # 先获取股票代码
-        result = self.get_favorite_code(stock_name)
+        result = self.get_favorite_code(pinyin_initials)
         if not result['success']:
             return {'success': False, 'msg': f"无法获取股票代码: {result['msg']}"}
 
         stock_code = result['stock_code']
-        print(f"从自选区买入: {stock_name} ({stock_code})")
+        print(f"从自选区买入: {pinyin_initials} ({stock_code})")
 
         # 使用常规买入方法
         return self.buy(stock_code, amount, price)
 
-    def sell_from_favorite(self, stock_name, amount, price):
+    def sell_from_favorite(self, pinyin_initials, amount, price):
         """
         从自选区卖出股票
 
         Args:
-            stock_name: 股票中文名称
+            pinyin_initials: 股票拼音首字母，如 "hkws" (海康威视), "xfetf" (消费ETF)
             amount: 卖出数量
             price: 卖出价格
 
@@ -828,33 +858,17 @@ class THSTrader:
             dict: {'success': bool, 'msg': str}
         """
         # 先获取股票代码
-        result = self.get_favorite_code(stock_name)
+        result = self.get_favorite_code(pinyin_initials)
         if not result['success']:
             return {'success': False, 'msg': f"无法获取股票代码: {result['msg']}"}
 
         stock_code = result['stock_code']
-        print(f"从自选区卖出: {stock_name} ({stock_code})")
+        print(f"从自选区卖出: {pinyin_initials} ({stock_code})")
 
         # 使用常规卖出方法
         return self.sell(stock_code, amount, price)
 
     # ==================== 辅助方法 ====================
-
-    def _get_pinyin_initials(self, text):
-        """
-        获取中文文本的拼音首字母
-
-        Args:
-            text: 中文文本，如 "海康威视"
-
-        Returns:
-            str: 拼音首字母，如 "hkws"
-        """
-        if not HAS_PINYIN:
-            return text
-
-        pinyin_list = lazy_pinyin(text, style=Style.FIRST_LETTER)
-        return ''.join(pinyin_list).lower()
 
     def _navigate_to_favorites(self):
         """导航到自选股页面"""
