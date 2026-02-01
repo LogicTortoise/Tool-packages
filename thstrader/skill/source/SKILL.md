@@ -1,6 +1,6 @@
 ---
 name: thstrader
-description: "Automate stock trading operations on TongHuaShun (同花顺) mobile app for simulated trading. Use when working with stock trading tasks including: (1) Query account balance and positions, (2) Buy or sell stocks, (3) Manage pending orders and cancellations, (4) Automate trading strategies. Works with Android emulator (BlueStacks) via ADB and uiautomator2."
+description: "Automate stock trading operations on TongHuaShun (同花顺) mobile app for simulated trading. Use when working with stock trading tasks including: (1) Query account balance and positions, (2) Buy or sell stocks, (3) Manage pending orders and cancellations, (4) Manage favorite stocks (add/remove/search), (5) Trade from favorites using stock names instead of codes, (6) Automate trading strategies. Supports pinyin search for Chinese stock names. Works with Android emulator (BlueStacks) via ADB and uiautomator2."
 ---
 
 # THS Trader - 同花顺自动交易
@@ -157,6 +157,79 @@ if result['success']:
 
 **Important**: Parameters (name, type, amount, price) must EXACTLY match the pending order.
 
+### 6. Manage Favorite Stocks
+
+**Add to favorites** (uses pinyin search):
+```bash
+python trader.py add-favorite --name 海康威视
+```
+
+```python
+result = trader.add_favorite("海康威视")
+
+if result['success']:
+    print(f"Added to favorites, code: {result.get('stock_code', 'N/A')}")
+```
+
+**Remove from favorites**:
+```bash
+python trader.py remove-favorite --name 海康威视
+```
+
+```python
+result = trader.remove_favorite("海康威视")
+
+if result['success']:
+    print("Removed from favorites")
+```
+
+**Get stock code from favorites**:
+```bash
+python trader.py get-code --name 海康威视
+```
+
+```python
+result = trader.get_favorite_code("海康威视")
+
+if result['success']:
+    print(f"Stock code: {result['stock_code']}")
+```
+
+### 7. Trade from Favorites
+
+Trade using Chinese stock names instead of codes:
+
+**Buy from favorites**:
+```bash
+python trader.py buy-favorite --name 海康威视 --amount 1000 --price 31.5
+```
+
+```python
+# No need to remember stock code
+result = trader.buy_from_favorite("海康威视", 1000, 31.5)
+
+if result['success']:
+    print(f"Buy order submitted: {result['msg']}")
+```
+
+**Sell from favorites**:
+```bash
+python trader.py sell-favorite --name 海康威视 --amount 500 --price 32.0
+```
+
+```python
+result = trader.sell_from_favorite("海康威视", 500, 32.0)
+
+if result['success']:
+    print(f"Sell order submitted: {result['msg']}")
+```
+
+**How it works**:
+1. Converts Chinese name to pinyin initials (e.g., 海康威视 → hkws)
+2. Searches favorites using pinyin
+3. Retrieves stock code via OCR
+4. Executes trade using the code
+
 ## Common Patterns
 
 ### Batch Buy Multiple Stocks
@@ -208,6 +281,38 @@ for w in withdrawals:
         int(w['委托数量'].replace(',', '')),
         float(w['委托价格'].replace(',', ''))
     )
+```
+
+### Build Watchlist and Trade
+
+```python
+# Build a watchlist of favorite stocks
+stocks_to_watch = ["海康威视", "同花顺", "贵州茅台"]
+
+for name in stocks_to_watch:
+    result = trader.add_favorite(name)
+    print(f"Added {name}: {result['msg']}")
+
+# Trade directly from favorites using names
+trader.buy_from_favorite("海康威视", 1000, 31.5)
+trader.buy_from_favorite("同花顺", 100, 350.0)
+
+# No need to remember stock codes!
+```
+
+### Batch Trade from Favorites
+
+```python
+# Trade multiple stocks using Chinese names
+favorite_trades = [
+    ("海康威视", 1000, 31.5),
+    ("同花顺", 100, 350.0),
+    ("贵州茅台", 10, 1800.0),
+]
+
+for name, amount, price in favorite_trades:
+    result = trader.buy_from_favorite(name, amount, price)
+    print(f"{name}: {result['msg']}")
 ```
 
 ## References

@@ -14,6 +14,13 @@ except ImportError:
     HAS_OCR = False
     print("警告: easyocr 未安装，OCR 功能将不可用")
 
+try:
+    from pypinyin import lazy_pinyin, Style
+    HAS_PINYIN = True
+except ImportError:
+    HAS_PINYIN = False
+    print("警告: pypinyin 未安装，拼音搜索功能将不可用")
+
 
 class THSTrader:
     """同花顺模拟炒股自动交易类"""
@@ -559,3 +566,317 @@ class THSTrader:
             "委托数量": int(stock_count.replace(",", "")),
             "委托类型": t.replace(" ", "")
         }
+
+    # ==================== 自选股功能 ====================
+
+    def add_favorite(self, stock_name):
+        """
+        添加自选股
+
+        Args:
+            stock_name: 股票中文名称，如 "海康威视"
+
+        Returns:
+            dict: {'success': bool, 'msg': str, 'stock_code': str}
+        """
+        if not HAS_PINYIN:
+            return {'success': False, 'msg': 'pypinyin 未安装', 'stock_code': ''}
+
+        print(f"\n添加自选股: {stock_name}")
+
+        # 获取拼音首字母
+        pinyin_code = self._get_pinyin_initials(stock_name)
+        print(f"拼音首字母: {pinyin_code}")
+
+        # 返回主页
+        self._back_to_moni_page()
+
+        # 点击搜索框（通常在顶部）
+        self._close_dialogs()
+        time.sleep(1)
+
+        # 点击屏幕上方搜索区域（坐标需要根据实际UI调整）
+        self.d.click(360, 100)
+        time.sleep(DEFAULT_WAIT)
+
+        # 输入拼音首字母搜索
+        self._input_text(pinyin_code)
+        time.sleep(DEFAULT_WAIT)
+
+        # 获取第一个搜索结果的股票代码
+        stock_code = ""
+        try:
+            # 尝试获取第一个搜索结果
+            if self.d(resourceId=UI_ELEMENTS["stockname_tv"]).exists:
+                first_result = self.d.xpath(XPATHS["stock_search_result"])
+
+                # 长按以显示添加自选选项
+                first_result.long_click()
+                time.sleep(2)
+
+                # 查找并点击"添加自选"按钮
+                if self.d(text="添加自选").exists:
+                    self.d(text="添加自选").click()
+                    time.sleep(1)
+                    msg = "添加成功"
+                    success = True
+                elif self.d(text="加自选").exists:
+                    self.d(text="加自选").click()
+                    time.sleep(1)
+                    msg = "添加成功"
+                    success = True
+                else:
+                    # 备选方案：点击第一个结果进入详情页，从那里添加自选
+                    first_result.click()
+                    time.sleep(2)
+
+                    # 查找添加自选图标或按钮
+                    if self.d(description="添加自选").exists:
+                        self.d(description="添加自选").click()
+                        time.sleep(1)
+                        msg = "添加成功"
+                        success = True
+                    else:
+                        msg = "未找到添加自选按钮"
+                        success = False
+
+                # 返回
+                self.d.press("back")
+                time.sleep(1)
+
+                print(f"✓ {msg}: {stock_name}")
+                return {'success': success, 'msg': msg, 'stock_code': stock_code}
+            else:
+                msg = "未找到搜索结果"
+                print(f"✗ {msg}")
+                return {'success': False, 'msg': msg, 'stock_code': ''}
+
+        except Exception as e:
+            msg = f"操作失败: {str(e)}"
+            print(f"✗ {msg}")
+            return {'success': False, 'msg': msg, 'stock_code': ''}
+
+    def remove_favorite(self, stock_name):
+        """
+        移除自选股
+
+        Args:
+            stock_name: 股票中文名称，如 "海康威视"
+
+        Returns:
+            dict: {'success': bool, 'msg': str}
+        """
+        if not HAS_PINYIN:
+            return {'success': False, 'msg': 'pypinyin 未安装'}
+
+        print(f"\n移除自选股: {stock_name}")
+
+        # 获取拼音首字母
+        pinyin_code = self._get_pinyin_initials(stock_name)
+
+        # 导航到自选页面
+        self._navigate_to_favorites()
+
+        # 在自选列表中搜索股票
+        try:
+            # 使用拼音搜索自选股
+            if self.d(resourceId="com.hexin.plat.android:id/search_edit").exists:
+                self.d(resourceId="com.hexin.plat.android:id/search_edit").click()
+                time.sleep(1)
+                self._input_text(pinyin_code)
+                time.sleep(DEFAULT_WAIT)
+
+            # 长按第一个结果显示删除选项
+            if self.d(resourceId=UI_ELEMENTS["stockname_tv"]).exists:
+                first_result = self.d.xpath('//*[@resource-id="com.hexin.plat.android:id/recyclerView"]/android.widget.RelativeLayout[1]')
+                first_result.long_click()
+                time.sleep(2)
+
+                # 点击删除自选
+                if self.d(text="删除自选").exists:
+                    self.d(text="删除自选").click()
+                    time.sleep(1)
+
+                    # 确认删除
+                    if self.d(text="确定").exists or self.d(text="确认").exists:
+                        if self.d(text="确定").exists:
+                            self.d(text="确定").click()
+                        else:
+                            self.d(text="确认").click()
+                        time.sleep(1)
+                        msg = "删除成功"
+                        success = True
+                    else:
+                        msg = "删除成功"
+                        success = True
+                elif self.d(text="删除").exists:
+                    self.d(text="删除").click()
+                    time.sleep(1)
+                    msg = "删除成功"
+                    success = True
+                else:
+                    msg = "未找到删除选项"
+                    success = False
+
+                # 返回
+                self.d.press("back")
+                time.sleep(1)
+
+                print(f"✓ {msg}: {stock_name}")
+                return {'success': success, 'msg': msg}
+            else:
+                msg = "未找到该自选股"
+                print(f"✗ {msg}")
+                return {'success': False, 'msg': msg}
+
+        except Exception as e:
+            msg = f"操作失败: {str(e)}"
+            print(f"✗ {msg}")
+            return {'success': False, 'msg': msg}
+
+    def get_favorite_code(self, stock_name):
+        """
+        从自选区获取股票代码
+
+        Args:
+            stock_name: 股票中文名称，如 "海康威视"
+
+        Returns:
+            dict: {'success': bool, 'stock_code': str, 'msg': str}
+        """
+        if not HAS_PINYIN or not self.reader:
+            return {'success': False, 'stock_code': '', 'msg': '缺少必要库'}
+
+        print(f"\n从自选区获取股票代码: {stock_name}")
+
+        # 获取拼音首字母
+        pinyin_code = self._get_pinyin_initials(stock_name)
+
+        # 导航到自选页面
+        self._navigate_to_favorites()
+
+        try:
+            # 截图自选列表
+            time.sleep(1)
+            self.d.screenshot("favorites.png")
+
+            # 使用OCR识别股票名称和代码
+            if self.reader:
+                result = self.reader.readtext("favorites.png")
+
+                # 在OCR结果中查找匹配的股票名称
+                for i, item in enumerate(result):
+                    text = item[1]
+                    if stock_name in text or pinyin_code.upper() in text.upper():
+                        # 尝试在附近找到股票代码（6位数字）
+                        for j in range(max(0, i-2), min(len(result), i+3)):
+                            code_text = result[j][1]
+                            # 提取6位数字
+                            import re
+                            match = re.search(r'\d{6}', code_text)
+                            if match:
+                                stock_code = match.group()
+                                print(f"✓ 找到股票代码: {stock_code}")
+                                return {'success': True, 'stock_code': stock_code, 'msg': '获取成功'}
+
+            # 返回
+            self.d.press("back")
+            time.sleep(1)
+
+            msg = "未找到匹配的股票代码"
+            print(f"✗ {msg}")
+            return {'success': False, 'stock_code': '', 'msg': msg}
+
+        except Exception as e:
+            msg = f"操作失败: {str(e)}"
+            print(f"✗ {msg}")
+            return {'success': False, 'stock_code': '', 'msg': msg}
+
+    def buy_from_favorite(self, stock_name, amount, price):
+        """
+        从自选区买入股票
+
+        Args:
+            stock_name: 股票中文名称
+            amount: 买入数量
+            price: 买入价格
+
+        Returns:
+            dict: {'success': bool, 'msg': str}
+        """
+        # 先获取股票代码
+        result = self.get_favorite_code(stock_name)
+        if not result['success']:
+            return {'success': False, 'msg': f"无法获取股票代码: {result['msg']}"}
+
+        stock_code = result['stock_code']
+        print(f"从自选区买入: {stock_name} ({stock_code})")
+
+        # 使用常规买入方法
+        return self.buy(stock_code, amount, price)
+
+    def sell_from_favorite(self, stock_name, amount, price):
+        """
+        从自选区卖出股票
+
+        Args:
+            stock_name: 股票中文名称
+            amount: 卖出数量
+            price: 卖出价格
+
+        Returns:
+            dict: {'success': bool, 'msg': str}
+        """
+        # 先获取股票代码
+        result = self.get_favorite_code(stock_name)
+        if not result['success']:
+            return {'success': False, 'msg': f"无法获取股票代码: {result['msg']}"}
+
+        stock_code = result['stock_code']
+        print(f"从自选区卖出: {stock_name} ({stock_code})")
+
+        # 使用常规卖出方法
+        return self.sell(stock_code, amount, price)
+
+    # ==================== 辅助方法 ====================
+
+    def _get_pinyin_initials(self, text):
+        """
+        获取中文文本的拼音首字母
+
+        Args:
+            text: 中文文本，如 "海康威视"
+
+        Returns:
+            str: 拼音首字母，如 "hkws"
+        """
+        if not HAS_PINYIN:
+            return text
+
+        pinyin_list = lazy_pinyin(text, style=Style.FIRST_LETTER)
+        return ''.join(pinyin_list).lower()
+
+    def _navigate_to_favorites(self):
+        """导航到自选股页面"""
+        print("导航到自选股页面...")
+
+        # 关闭对话框
+        self._close_dialogs()
+
+        # 启动应用
+        self.d.app_start(APP_PACKAGE)
+        time.sleep(2)
+        self._close_dialogs()
+
+        # 点击底部"自选"标签（坐标需要根据实际UI调整）
+        # 通常自选在左侧第一个或第二个位置
+        if self.d(text="自选").exists:
+            self.d(text="自选").click()
+        elif self.d(description="自选").exists:
+            self.d(description="自选").click()
+        else:
+            # 使用坐标点击（假设在底部左侧第一个位置）
+            self.d.click(72, 1210)
+
+        time.sleep(DEFAULT_WAIT)
+        self._close_dialogs()

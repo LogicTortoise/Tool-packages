@@ -48,6 +48,13 @@ UI_ELEMENTS = {
 
     # 结果展示
     "content_scroll": "com.hexin.plat.android:id/content_scroll",  # 结果滚动区域
+
+    # 自选股相关
+    "tab_optional": "com.hexin.plat.android:id/tab_optional",  # 自选标签
+    "add_optional": "com.hexin.plat.android:id/add_optional",  # 添加自选按钮
+    "optional_list": "com.hexin.plat.android:id/optional_list",  # 自选列表
+    "stock_item": "com.hexin.plat.android:id/stock_item",  # 股票项
+    "stock_code": "com.hexin.plat.android:id/stock_code",  # 股票代码
 }
 
 # 坐标位置（720x1280分辨率）

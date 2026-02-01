@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 THSTrader CLI 入口
-支持多个命令：获取余额、获取持仓、买入、卖出、获取撤单列表、撤单
+支持多个命令：获取余额、获取持仓、买入、卖出、获取撤单列表、撤单、自选股管理
 
 使用示例:
     python trader.py balance --device 127.0.0.1:5565
@@ -10,6 +10,11 @@ THSTrader CLI 入口
     python trader.py sell --code 002415 --amount 500 --price 11.0
     python trader.py withdrawals
     python trader.py cancel --name 海康威视 --type 买入 --amount 1000 --price 10.0
+    python trader.py add-favorite --name 海康威视
+    python trader.py remove-favorite --name 海康威视
+    python trader.py get-code --name 海康威视
+    python trader.py buy-favorite --name 海康威视 --amount 1000 --price 31.5
+    python trader.py sell-favorite --name 海康威视 --amount 500 --price 32.0
 """
 
 import argparse
@@ -136,6 +141,107 @@ def cmd_cancel(args):
     return 0 if result['success'] else 1
 
 
+def cmd_add_favorite(args):
+    """添加自选股"""
+    trader = THSTrader(args.device)
+    result = trader.add_favorite(args.name)
+
+    print("\n" + "="*60)
+    print("添加自选股结果")
+    print("="*60)
+    print(f"  股票名称: {args.name}")
+    print(f"  股票代码: {result.get('stock_code', '未获取')}")
+    print(f"  状态: {'✓ 成功' if result['success'] else '✗ 失败'}")
+    print(f"  消息: {result['msg']}")
+    print("="*60)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    return 0 if result['success'] else 1
+
+
+def cmd_remove_favorite(args):
+    """移除自选股"""
+    trader = THSTrader(args.device)
+    result = trader.remove_favorite(args.name)
+
+    print("\n" + "="*60)
+    print("移除自选股结果")
+    print("="*60)
+    print(f"  股票名称: {args.name}")
+    print(f"  状态: {'✓ 成功' if result['success'] else '✗ 失败'}")
+    print(f"  消息: {result['msg']}")
+    print("="*60)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    return 0 if result['success'] else 1
+
+
+def cmd_get_code(args):
+    """从自选区获取股票代码"""
+    trader = THSTrader(args.device)
+    result = trader.get_favorite_code(args.name)
+
+    print("\n" + "="*60)
+    print("获取股票代码结果")
+    print("="*60)
+    print(f"  股票名称: {args.name}")
+    print(f"  股票代码: {result['stock_code']}")
+    print(f"  状态: {'✓ 成功' if result['success'] else '✗ 失败'}")
+    print(f"  消息: {result['msg']}")
+    print("="*60)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    return 0 if result['success'] else 1
+
+
+def cmd_buy_favorite(args):
+    """从自选区买入股票"""
+    trader = THSTrader(args.device)
+    result = trader.buy_from_favorite(args.name, args.amount, args.price)
+
+    print("\n" + "="*60)
+    print("从自选区买入结果")
+    print("="*60)
+    print(f"  股票名称: {args.name}")
+    print(f"  买入数量: {args.amount} 股")
+    print(f"  买入价格: {args.price}")
+    print(f"  状态: {'✓ 成功' if result['success'] else '✗ 失败'}")
+    print(f"  消息: {result['msg']}")
+    print("="*60)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    return 0 if result['success'] else 1
+
+
+def cmd_sell_favorite(args):
+    """从自选区卖出股票"""
+    trader = THSTrader(args.device)
+    result = trader.sell_from_favorite(args.name, args.amount, args.price)
+
+    print("\n" + "="*60)
+    print("从自选区卖出结果")
+    print("="*60)
+    print(f"  股票名称: {args.name}")
+    print(f"  卖出数量: {args.amount} 股")
+    print(f"  卖出价格: {args.price}")
+    print(f"  状态: {'✓ 成功' if result['success'] else '✗ 失败'}")
+    print(f"  消息: {result['msg']}")
+    print("="*60)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    return 0 if result['success'] else 1
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='THSTrader - 同花顺模拟炒股自动化交易工具',
@@ -159,6 +265,21 @@ def main():
 
   撤单:
     %(prog)s cancel --name 海康威视 --type 买入 --amount 1000 --price 10.0
+
+  添加自选股:
+    %(prog)s add-favorite --name 海康威视
+
+  移除自选股:
+    %(prog)s remove-favorite --name 海康威视
+
+  获取股票代码:
+    %(prog)s get-code --name 海康威视
+
+  从自选区买入:
+    %(prog)s buy-favorite --name 海康威视 --amount 1000 --price 31.5
+
+  从自选区卖出:
+    %(prog)s sell-favorite --name 海康威视 --amount 500 --price 32.0
         """
     )
 
@@ -202,6 +323,35 @@ def main():
     parser_cancel.add_argument('--amount', '-a', type=int, required=True, help='委托数量')
     parser_cancel.add_argument('--price', '-p', type=float, required=True, help='委托价格')
     parser_cancel.set_defaults(func=cmd_cancel)
+
+    # add-favorite 命令
+    parser_add_fav = subparsers.add_parser('add-favorite', help='添加自选股')
+    parser_add_fav.add_argument('--name', '-n', required=True, help='股票名称')
+    parser_add_fav.set_defaults(func=cmd_add_favorite)
+
+    # remove-favorite 命令
+    parser_rm_fav = subparsers.add_parser('remove-favorite', help='移除自选股')
+    parser_rm_fav.add_argument('--name', '-n', required=True, help='股票名称')
+    parser_rm_fav.set_defaults(func=cmd_remove_favorite)
+
+    # get-code 命令
+    parser_get_code = subparsers.add_parser('get-code', help='从自选区获取股票代码')
+    parser_get_code.add_argument('--name', '-n', required=True, help='股票名称')
+    parser_get_code.set_defaults(func=cmd_get_code)
+
+    # buy-favorite 命令
+    parser_buy_fav = subparsers.add_parser('buy-favorite', help='从自选区买入股票')
+    parser_buy_fav.add_argument('--name', '-n', required=True, help='股票名称')
+    parser_buy_fav.add_argument('--amount', '-a', type=int, required=True, help='买入数量')
+    parser_buy_fav.add_argument('--price', '-p', type=float, required=True, help='买入价格')
+    parser_buy_fav.set_defaults(func=cmd_buy_favorite)
+
+    # sell-favorite 命令
+    parser_sell_fav = subparsers.add_parser('sell-favorite', help='从自选区卖出股票')
+    parser_sell_fav.add_argument('--name', '-n', required=True, help='股票名称')
+    parser_sell_fav.add_argument('--amount', '-a', type=int, required=True, help='卖出数量')
+    parser_sell_fav.add_argument('--price', '-p', type=float, required=True, help='卖出价格')
+    parser_sell_fav.set_defaults(func=cmd_sell_favorite)
 
     args = parser.parse_args()
 
