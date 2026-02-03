@@ -65,6 +65,31 @@ Tool-packages/
 - 自动重试机制和错误处理
 - 解决 BlueStacks/模拟器兼容性问题
 
+### 2. Bilibili-to-Text - B站视频转文字工具
+
+**功能**: 下载 Bilibili 视频并使用 faster-whisper 转录为高质量中文文本
+
+**Skill 位置**: `bilibili-to-text/skill/bilibili-to-text.skill`
+
+**源代码**: `bilibili-to-text/skill/source/`
+
+**主要功能**:
+- 自动下载 Bilibili 视频（支持 b23.tv 短链接）
+- 高质量语音转文字（95%+ 中文准确度）
+- 生成 SRT 字幕 + TXT 纯文本
+- 自动语言检测
+- 可选内容分析和总结
+
+**技术栈**: Python + you-get + faster-whisper + Whisper medium 模型
+
+**核心优势**:
+- 转录质量比 bili2text 提升 15 倍以上
+- 处理速度比原版 Whisper 快 4-10 倍
+- 中文准确度：⭐⭐⭐⭐⭐
+- 支持长视频批量处理
+
+**依赖项目**: `~/Documents/10.github/bili2text/`
+
 ---
 
 ## 使用指南
