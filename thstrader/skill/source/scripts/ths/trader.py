@@ -547,6 +547,8 @@ class THSTrader:
             check: 是否检查输入结果
         """
         max_retry = 3
+        text = str(text)
+        
         for i in range(max_retry):
             # 1. 点击聚焦
             if self.d(resourceId=target_id).exists:
@@ -556,38 +558,61 @@ class THSTrader:
                 print(f"⚠️ 找不到输入框: {target_id}")
                 return False
 
-            # 2. 清空 (尝试点击右侧清除按钮，如果没有则长按+删，或多次退格)
-            # 尝试全选删除
-            self.d.press("move_end")
-            # 连按删除键 (根据文本长度)
-            current_len = 10 
+            # 2. 清空 (不仅删除，也尝试 set_text)
             try:
-                current_text = self.d(resourceId=target_id).get_text()
-                if current_text: current_len = len(current_text) + 5
+                self.d(resourceId=target_id).set_text("") # 尝试直接设置为空
             except: pass
             
-            for _ in range(current_len):
+            # 手动删除兜底
+            self.d.press("move_end")
+            # 如果能获取当前长度，就删当前长度；获取不到就多删点
+            try:
+                current_text = self.d(resourceId=target_id).get_text()
+                del_len = len(current_text) + 5 if current_text else 20
+            except:
+                del_len = 20
+            
+            for _ in range(del_len):
                 self.d.press("del")
             
             # 3. 输入
+            # 尝试直接 set_text (有些输入框支持)
+            try:
+                self.d(resourceId=target_id).set_text(text)
+                time.sleep(0.5)
+                # 检查是否生效
+                actual = self.d(resourceId=target_id).get_text()
+                if actual and str(text) in actual.replace(",", ""):
+                     print(f"✓ set_text 输入成功: {text}")
+                     return True
+            except: pass
+
+            # 如果 set_text 不行，还是用 input text
             self.d.shell(f"input text {text}")
             time.sleep(1)
             
-            # 4. 检查 (如果 text 是中文可能比较难查，这里主要针对数字和代码)
+            # 4. 检查
             if check:
                 try:
                     actual = self.d(resourceId=target_id).get_text()
-                    # 简单清理一下格式
+                    # 清理格式
+                    clean_actual = ""
                     if actual:
-                        actual = actual.replace(",", "").replace(" ", "")
+                        clean_actual = actual.replace(",", "").replace(" ", "")
                     
-                    if str(text) in str(actual): # 包含即可 (有时会有前缀)
-                        print(f"✓ 输入成功: {text}")
-                        return True
-                    else:
-                        print(f"⚠️ 输入校验失败: 期望 '{text}', 实际 '{actual}', 重试 {i+1}/{max_retry}")
+                    # 精确匹配（转换为数字比较，防止 '1000' vs '1000.0'）
+                    try:
+                        if float(clean_actual) == float(text):
+                            print(f"✓ 输入校验成功: {text}")
+                            return True
+                    except:
+                        # 字符串包含匹配
+                        if str(text) == clean_actual:
+                            print(f"✓ 输入校验成功: {text}")
+                            return True
+                    
+                    print(f"⚠️ 输入校验不符: 期望 '{text}', 实际 '{actual}', 重试 {i+1}/{max_retry}")
                 except:
-                    # 获取不到文本，假装成功
                     return True
             else:
                 return True
