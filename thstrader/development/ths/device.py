@@ -72,10 +72,10 @@ class Device:
             self._device = u2.connect(self.serial)
 
         # Set long timeout to keep connection alive (7 days)
-        self._device.set_new_command_timeout(604800)
+        # self._device.set_new_command_timeout(604800)
 
         print(f"Connected to device: {self.serial}")
-        print(f"ATX Agent URL: {self._device._get_atx_agent_url()}")
+        # print(f"ATX Agent URL: {self._device._get_atx_agent_url()}")
 
     @property
     def d(self):

@@ -290,28 +290,78 @@ class THSTrader:
     # ==================== 私有方法 ====================
 
     def _back_to_moni_page(self):
-        """返回到模拟炒股主页"""
-        # 关闭可能的对话框
-        self._close_dialogs()
-
-        # 启动应用
+        """返回到模拟炒股主页 (增强版)"""
+        print("DEBUG: Navigating to Simulation Trading page...")
+        
+        # 1. 尝试直接启动/前台化应用
+        print("DEBUG: app_start...")
         self.d.app_start(APP_PACKAGE)
         time.sleep(2)
         self._close_dialogs()
 
-        # 点击底部"交易"标签
-        if self.d(text="交易").exists:
-            self.d(text="交易").click()
-        else:
-            self.d.click(*COORDINATES["trading_tab"])
-        time.sleep(DEFAULT_WAIT)
-        self._close_dialogs()
+        # 2. 检查是否已经在模拟炒股页面 (通过 resourceId 判断)
+        print("DEBUG: checking if already on page...")
+        if self.d(resourceId=UI_ELEMENTS["menu_buy_image"]).exists:
+             print("DEBUG: Already on Simulation Trading page.")
+             return
 
-        # 点击"模拟炒股"标签
+        # 3. 循环尝试回到主页并进入
+        max_retries = 3
+        for i in range(max_retries):
+            print(f"DEBUG: Navigation retry {i+1}/{max_retries}")
+            # 检查底部"交易"标签
+            if self.d(text="交易").exists or self.d(description="交易").exists:
+                print("DEBUG: Clicking 'Trading' tab...")
+                if self.d(text="交易").exists:
+                    self.d(text="交易").click()
+                else:
+                    self.d(description="交易").click()
+                
+                time.sleep(DEFAULT_WAIT)
+                self._close_dialogs()
+                
+                # 点击"模拟炒股"
+                if self.d(resourceId=UI_ELEMENTS["tab_moni"]).exists:
+                    print("DEBUG: Clicking 'Simulation Trading' tab...")
+                    self.d(resourceId=UI_ELEMENTS["tab_moni"]).click()
+                    time.sleep(2)
+                    self._close_dialogs()
+                    return
+                elif self.d(text="模拟炒股").exists:
+                     print("DEBUG: Clicking 'Simulation Trading' text...")
+                     self.d(text="模拟炒股").click()
+                     time.sleep(2)
+                     return
+                else:
+                    print("DEBUG: 'Simulation Trading' tab not found")
+
+            # 如果没找到交易标签，可能在某个子页面，尝试 Back
+            print(f"DEBUG: Trading tab not found, pressing Back ({i+1}/{max_retries})...")
+            self.d.press("back")
+            time.sleep(1)
+            self._close_dialogs()
+
+        # 4. 如果还是不行，强制重启应用
+        print("DEBUG: Navigation failed, restarting app...")
+        self.d.app_stop(APP_PACKAGE)
+        time.sleep(1)
+        self.d.app_start(APP_PACKAGE)
+        time.sleep(5) # 等待冷启动
+        self._close_dialogs()
+        
+        # 再次尝试点击交易
+        print("DEBUG: Force retry clicking trading tab...")
+        try:
+            self.d.click(*COORDINATES["trading_tab"])
+        except Exception as e:
+            print(f"DEBUG: Coordinate click failed: {e}")
+            
+        time.sleep(DEFAULT_WAIT)
         if self.d(resourceId=UI_ELEMENTS["tab_moni"]).exists:
             self.d(resourceId=UI_ELEMENTS["tab_moni"]).click()
-            time.sleep(2)
-            self._close_dialogs()
+        else:
+            print("DEBUG: Still cannot find tab_moni")
+        time.sleep(2)
 
     def _close_dialogs(self):
         """关闭可能的对话框"""
@@ -479,11 +529,45 @@ class THSTrader:
             self._input_text(amount)
 
     def _input_text(self, text):
-        """文本输入工具"""
-        self.d.shell("input keyevent 123")  # MOVE_END
+        """
+        文本输入工具
+        优先使用 keyevent 模拟物理按键，以解决模拟器上 input text 不稳定的问题
+        """
+        # 1. 清除现有文本
+        # 移动到末尾
+        self.d.shell("input keyevent 123")
+        # 连续删除
         for _ in range(INPUT_CLEAR_COUNT):
-            self.d.shell("input keyevent 67")  # DEL
-        self.d.shell(f"input text {text}")
+             self.d.shell("input keyevent 67")
+
+        # 2. 输入新文本
+        # 尝试将字符转换为 keycode 输入
+        try:
+            for char in str(text):
+                keycode = self._char_to_keycode(char)
+                if keycode:
+                    self.d.shell(f"input keyevent {keycode}")
+                else:
+                    # 如果无法通过 keycode 输入（如特殊字符），回退到 input text
+                    self.d.shell(f"input text {char}")
+                time.sleep(0.1)  # 输入间隔，防漏
+        except Exception as e:
+            print(f"Keyevent input failed: {e}, fallback to input text")
+            self.d.shell(f"input text {text}")
+
+    def _char_to_keycode(self, char):
+        """字符转安卓 keycode"""
+        if '0' <= char <= '9':
+            return 7 + int(char)
+        elif 'a' <= char <= 'z':
+            return 29 + (ord(char) - ord('a'))
+        elif 'A' <= char <= 'Z':
+            # 大写字母需要配合 SHIFT (未实现复杂组合，暂时返回None回退到input text)
+            # 或者可以实现 shift + keycode
+            return None
+        elif char == '.':
+            return 56
+        return None
 
     def _verify_order(self, stock_code, amount, price):
         """验证订单信息"""

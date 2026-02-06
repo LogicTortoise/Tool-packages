@@ -286,29 +286,90 @@ class THSTrader:
 
     # ==================== 私有方法 ====================
 
-    def _back_to_moni_page(self):
-        """返回到模拟炒股主页"""
-        # 关闭可能的对话框
-        self._close_dialogs()
+    def _ocr_click(self, text, timeout=3):
+        """
+        OCR 查找并点击文本
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if not self.reader: return False
+            
+            # 截图
+            self.d.screenshot("scr_find.png")
+            try:
+                res = self.reader.ocr("scr_find.png")
+                # res 格式: [[[[x1,y1],[x2,y2],[x3,y3],[x4,y4]], text, score], ...]
+                for item in res:
+                    # item结构可能不同，适配一下
+                    if isinstance(item, list) and len(item) >= 2:
+                        txt_content = item[1]
+                        box = item[0] # 坐标
+                    else:
+                        continue # 格式不对
+                    
+                    if text in txt_content:
+                        # 计算中心点
+                        # box可能是 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                        # 或者是 [x1, y1, x2, y2]
+                        # rapidocr 返回的是四个顶点坐标
+                        import numpy as np
+                        box = np.array(box)
+                        center_x = int(np.mean(box[:, 0]))
+                        center_y = int(np.mean(box[:, 1]))
+                        
+                        print(f"👁️ OCR 找到 '{text}' @ ({center_x}, {center_y})，点击！")
+                        self.d.click(center_x, center_y)
+                        return True
+            except Exception as e:
+                print(f"OCR Find Error: {e}")
+            time.sleep(1)
+        return False
 
-        # 启动应用
+    def _back_to_moni_page(self):
+        """返回到模拟炒股主页 (增强鲁棒版)"""
+        print("正在导航至【模拟炒股】...")
+        
+        # 1. 启动 & 关弹窗
         self.d.app_start(APP_PACKAGE)
         time.sleep(2)
         self._close_dialogs()
 
-        # 点击底部"交易"标签
-        if self.d(text="交易").exists:
-            self.d(text="交易").click()
-        else:
-            self.d.click(*COORDINATES["trading_tab"])
-        time.sleep(DEFAULT_WAIT)
-        self._close_dialogs()
+        # 2. 智能导航循环
+        # 目标是找到“买入”或“总资产”等标志，证明到了
+        max_steps = 3
+        for _ in range(max_steps):
+            # A. 如果已经在交易页（看到"买入"、"持仓"）
+            if self.d(resourceId=UI_ELEMENTS["menu_buy_image"]).exists or \
+               self.d(text="买入").exists or \
+               self.d(text="模拟练习区").exists:
+                print("✓ 已在模拟交易页面")
+                return
 
-        # 点击"模拟炒股"标签
-        if self.d(resourceId=UI_ELEMENTS["tab_moni"]).exists:
-            self.d(resourceId=UI_ELEMENTS["tab_moni"]).click()
-            time.sleep(2)
+            # B. 尝试点击底部的“交易”
+            # 先试 OCR 点击（更准）
+            if not self._ocr_click("交易"):
+                # 备选：ID点击
+                if self.d(text="交易").exists:
+                    self.d(text="交易").click()
+                else:
+                    self.d.click(*COORDINATES["trading_tab"])
+            
+            time.sleep(DEFAULT_WAIT)
             self._close_dialogs()
+
+            # C. 尝试点击顶部的“模拟”或“模拟炒股”
+            # 在交易页顶部 tab
+            if self._ocr_click("模拟"): # 找“模拟”两字
+                pass
+            elif self.d(resourceId=UI_ELEMENTS["tab_moni"]).exists:
+                self.d(resourceId=UI_ELEMENTS["tab_moni"]).click()
+            
+            # D. 特殊情况：如果在首页，尝试点“模拟炒股”大图标
+            self._ocr_click("模拟炒股")
+
+            time.sleep(1)
+        
+        print("⚠️ 导航可能未完全成功，尝试继续操作...")
 
     def _close_dialogs(self):
         """关闭可能的对话框"""
