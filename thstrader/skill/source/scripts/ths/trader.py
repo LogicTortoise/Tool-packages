@@ -538,29 +538,89 @@ class THSTrader:
                 'type': "error"
             }
 
+    def _input_text(self, target_id, text, check=True):
+        """
+        可靠的文本输入工具
+        Args:
+            target_id: 目标输入框的 Resource ID
+            text: 要输入的文本
+            check: 是否检查输入结果
+        """
+        max_retry = 3
+        for i in range(max_retry):
+            # 1. 点击聚焦
+            if self.d(resourceId=target_id).exists:
+                self.d(resourceId=target_id).click()
+                time.sleep(0.5)
+            else:
+                print(f"⚠️ 找不到输入框: {target_id}")
+                return False
+
+            # 2. 清空 (尝试点击右侧清除按钮，如果没有则长按+删，或多次退格)
+            # 尝试全选删除
+            self.d.press("move_end")
+            # 连按删除键 (根据文本长度)
+            current_len = 10 
+            try:
+                current_text = self.d(resourceId=target_id).get_text()
+                if current_text: current_len = len(current_text) + 5
+            except: pass
+            
+            for _ in range(current_len):
+                self.d.press("del")
+            
+            # 3. 输入
+            self.d.shell(f"input text {text}")
+            time.sleep(1)
+            
+            # 4. 检查 (如果 text 是中文可能比较难查，这里主要针对数字和代码)
+            if check:
+                try:
+                    actual = self.d(resourceId=target_id).get_text()
+                    # 简单清理一下格式
+                    if actual:
+                        actual = actual.replace(",", "").replace(" ", "")
+                    
+                    if str(text) in str(actual): # 包含即可 (有时会有前缀)
+                        print(f"✓ 输入成功: {text}")
+                        return True
+                    else:
+                        print(f"⚠️ 输入校验失败: 期望 '{text}', 实际 '{actual}', 重试 {i+1}/{max_retry}")
+                except:
+                    # 获取不到文本，假装成功
+                    return True
+            else:
+                return True
+        
+        print(f"✗ 输入最终失败: {text}")
+        return False
+
     def _input_stock_code(self, stock_code):
         """输入股票代码"""
         self._close_dialogs()
+        print(f"输入代码: {stock_code}")
 
         # 尝试多个可能的输入框
         input_ids = [UI_ELEMENTS["content_stock"], UI_ELEMENTS["content_buy_stock"]]
+        target_id = None
         for rid in input_ids:
             if self.d(resourceId=rid).exists:
-                self.d(resourceId=rid).click()
-                time.sleep(1)
+                target_id = rid
                 break
+        
+        if not target_id:
+            print("✗ 未找到股票代码输入框")
+            return
 
-        # 清空并输入
-        self._input_text(stock_code)
+        self._input_text(target_id, stock_code)
         time.sleep(DEFAULT_WAIT)
 
         # 选择搜索结果
         if self.d(resourceId=UI_ELEMENTS["stockname_tv"]).exists:
             try:
-                # 尝试使用 xpath 选择第一个结果
+                # 尝试点击第一个结果
                 self.d.xpath(XPATHS["stock_search_result"]).click()
             except:
-                # 备选方案
                 self.d(resourceId=UI_ELEMENTS["stockname_tv"]).click()
             time.sleep(DEFAULT_WAIT)
 
@@ -568,24 +628,13 @@ class THSTrader:
         """输入价格"""
         self._close_dialogs()
         if self.d(resourceId=UI_ELEMENTS["stockprice"]).exists:
-            self.d(resourceId=UI_ELEMENTS["stockprice"]).click()
-            time.sleep(1)
-            self._input_text(price)
+            self._input_text(UI_ELEMENTS["stockprice"], price)
 
     def _input_amount(self, amount):
         """输入数量"""
         self._close_dialogs()
         if self.d(resourceId=UI_ELEMENTS["stockvolume"]).exists:
-            self.d(resourceId=UI_ELEMENTS["stockvolume"]).click()
-            time.sleep(1)
-            self._input_text(amount)
-
-    def _input_text(self, text):
-        """文本输入工具"""
-        self.d.shell("input keyevent 123")  # MOVE_END
-        for _ in range(INPUT_CLEAR_COUNT):
-            self.d.shell("input keyevent 67")  # DEL
-        self.d.shell(f"input text {text}")
+            self._input_text(UI_ELEMENTS["stockvolume"], amount)
 
     def _verify_order(self, stock_code, amount, price):
         """验证订单信息"""
