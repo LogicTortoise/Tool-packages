@@ -360,112 +360,183 @@ class THSTrader:
             except:
                 pass
 
+    def _ocr_parse_holding(self, path):
+        """OCR 解析持仓信息"""
+        if not self.reader:
+            return {}
+
+        try:
+            Image.open(path).crop((11, 11, 165, 55)).save("tmp.png")
+            result = self._ocr_read("tmp.png")
+            stock_name = result[0][1] if result else "未知"
+
+            Image.open(path).crop((419, 11, 548, 55)).save("tmp.png")
+            result = self._ocr_read("tmp.png")
+            stock_count_str = result[0][1] if result else "0"
+            # 容错处理：过滤非数字字符
+            import re
+            stock_count_str = re.sub(r'[^\d]', '', stock_count_str)
+            stock_count = int(stock_count_str) if stock_count_str else 0
+
+            Image.open(path).crop((419, 60, 548, 102)).save("tmp.png")
+            result = self._ocr_read("tmp.png")
+            stock_avail_str = result[0][1] if result else "0"
+            stock_avail_str = re.sub(r'[^\d]', '', stock_avail_str)
+            stock_available = int(stock_avail_str) if stock_avail_str else 0
+
+            return {
+                "股票名称": stock_name.replace(" ", ""),
+                "股票余额": stock_count,
+                "可用余额": stock_available
+            }
+        except Exception as e:
+            print(f"⚠️ 解析持仓截图出错: {str(e)}")
+            return {"股票名称": "解析错误", "股票余额": 0, "可用余额": 0}
+
+    def _log_screen(self, tag="info"):
+        """截图并OCR日志"""
+        filename = f"log_{tag}_{int(time.time())}.png"
+        self.d.screenshot(filename)
+        print(f"📸 [{tag}] 已截图: {filename}")
+        if self.reader:
+            try:
+                # 简单识别屏幕中心区域或全屏
+                text = self._ocr_get_full_text_from_image(filename)
+                print(f"📝 [{tag}] 屏幕文字: {text[:100]}...") # 只打印前100字避免刷屏
+            except:
+                pass
+
+    def _ocr_get_full_text_from_image(self, path):
+        """从指定图片识别全文"""
+        if not self.reader: return ""
+        try:
+            result = self.reader.ocr(path)
+            text = ""
+            for line in result:
+                if line: text += "".join(line)
+            return text
+        except:
+            return ""
+
     def _trade_action(self, stock_code, amount, price, action="buy"):
         """
         买入/卖出通用方法
-
-        Args:
-            stock_code: 股票代码
-            amount: 数量
-            price: 价格
-            action: "buy" 或 "sell"
-
-        Returns:
-            dict: 交易结果
         """
-        stock_code = str(stock_code)
-        amount = str(amount)
-        price = str(price)
-        action_cn = "买入" if action == "buy" else "卖出"
+        try:
+            stock_code = str(stock_code)
+            amount = str(amount)
+            price = str(price)
+            action_cn = "买入" if action == "buy" else "卖出"
 
-        print(f"\n{action_cn}股票: {stock_code} {amount}股 @{price}")
+            print(f"\n{action_cn}股票: {stock_code} {amount}股 @{price}")
 
-        success = False
-        msg = ""
-        stock_name = ""
+            success = False
+            msg = ""
+            stock_name = ""
 
-        self._back_to_moni_page()
+            self._back_to_moni_page()
 
-        # 点击买入/卖出按钮
-        button_id = UI_ELEMENTS["menu_buy_image"] if action == "buy" else UI_ELEMENTS["menu_sale_image"]
-        button_coord = COORDINATES["buy_button"] if action == "buy" else COORDINATES["sell_button"]
+            # 点击买入/卖出按钮
+            button_id = UI_ELEMENTS["menu_buy_image"] if action == "buy" else UI_ELEMENTS["menu_sale_image"]
+            button_coord = COORDINATES["buy_button"] if action == "buy" else COORDINATES["sell_button"]
 
-        if self.d(resourceId=button_id).exists:
-            self.d(resourceId=button_id).click()
-        else:
-            self.d.click(*button_coord)
-        time.sleep(DEFAULT_WAIT)
-        self._close_dialogs()
-
-        # 输入股票代码
-        self._input_stock_code(stock_code)
-
-        # 输入价格
-        self._input_price(price)
-
-        # 输入数量
-        self._input_amount(amount)
-
-        # 截图保存
-        self.d.screenshot(f"{action}_{stock_code}_before.png")
-
-        # 点击买入/卖出按钮
-        if self.d(text=action_cn).exists:
-            self.d(text=action_cn).click()
+            if self.d(resourceId=button_id).exists:
+                self.d(resourceId=button_id).click()
+            else:
+                self.d.click(*button_coord)
             time.sleep(DEFAULT_WAIT)
+            self._close_dialogs()
 
-            # 检查确认对话框
-            if self.d(resourceId=UI_ELEMENTS["ok_btn"]).exists:
-                # 二次确认
-                if self._verify_order(stock_code, amount, price):
-                    try:
-                        stock_name = self.d(resourceId=UI_ELEMENTS["stock_name_value"]).get_text()
-                    except:
-                        stock_name = stock_code
+            # 输入股票代码
+            self._input_stock_code(stock_code)
 
-                    self.d.screenshot(f"{action}_{stock_code}_confirm.png")
-                    self.d(resourceId=UI_ELEMENTS["ok_btn"]).click()
-                    time.sleep(DEFAULT_WAIT)
+            # 输入价格
+            self._input_price(price)
 
-                    # OCR 识别结果
-                    if self.reader and self.d(resourceId=UI_ELEMENTS["content_scroll"]).exists:
-                        self.d(resourceId=UI_ELEMENTS["content_scroll"]).screenshot().save("tmp.png")
-                        msg = self._ocr_get_full_text()
-                    else:
-                        h = self.d.dump_hierarchy()
-                        if "委托已提交" in h or "成功" in h:
-                            msg = "委托已提交"
-                        else:
-                            msg = "已提交"
+            # 输入数量
+            self._input_amount(amount)
 
-                    # 关闭结果对话框
-                    if self.d(resourceId=UI_ELEMENTS["ok_btn"]).exists:
+            # 截图保存 (关键节点)
+            self._log_screen(f"{action}_input_done")
+
+            # 点击买入/卖出按钮
+            if self.d(text=action_cn).exists:
+                self.d(text=action_cn).click()
+                time.sleep(DEFAULT_WAIT)
+
+                # 检查确认对话框
+                if self.d(resourceId=UI_ELEMENTS["ok_btn"]).exists:
+                    # 二次确认
+                    if self._verify_order(stock_code, amount, price):
+                        try:
+                            stock_name = self.d(resourceId=UI_ELEMENTS["stock_name_value"]).get_text()
+                        except:
+                            stock_name = stock_code
+
+                        # 截图保存 (确认框)
+                        self._log_screen(f"{action}_confirm_dialog")
+                        
                         self.d(resourceId=UI_ELEMENTS["ok_btn"]).click()
+                        time.sleep(DEFAULT_WAIT)
 
-                    success = True
-                    print(f"✓ {action_cn}成功: {msg}")
+                        # 再次截图看结果
+                        self._log_screen(f"{action}_result")
+
+                        # OCR 识别结果
+                        if self.reader and self.d(resourceId=UI_ELEMENTS["content_scroll"]).exists:
+                            self.d(resourceId=UI_ELEMENTS["content_scroll"]).screenshot().save("tmp.png")
+                            msg = self._ocr_get_full_text()
+                        else:
+                            h = self.d.dump_hierarchy()
+                            if "委托已提交" in h or "成功" in h:
+                                msg = "委托已提交"
+                            else:
+                                msg = "已提交 (未精确认定)"
+
+                        # 关闭结果对话框
+                        if self.d(resourceId=UI_ELEMENTS["ok_btn"]).exists:
+                            self.d(resourceId=UI_ELEMENTS["ok_btn"]).click()
+
+                        success = True
+                        print(f"✓ {action_cn}成功: {msg}")
+                    else:
+                        # 确认失败，取消
+                        print("⚠️ 订单信息验证不符")
+                        self._log_screen(f"{action}_verify_fail")
+                        self.d(resourceId=UI_ELEMENTS["cancel_btn"]).click()
+                        msg = "订单确认信息不符"
+                        print(f"✗ {msg}")
                 else:
-                    # 确认失败，取消
-                    self.d(resourceId=UI_ELEMENTS["cancel_btn"]).click()
-                    msg = "订单确认失败"
-                    print(f"✗ {msg}")
+                    # 没找到确认框，可能是直接提交了，也可能是点按钮没反应
+                    print("⚠️ 未检测到确认框，可能下单未触发")
+                    self._log_screen(f"{action}_no_confirm")
+                    msg = "未检测到确认弹窗"
 
-        # 截图保存
-        time.sleep(1)
-        self.d.screenshot(f"{action}_{stock_code}_after.png")
+            # 返回
+            self.d.press("back")
+            time.sleep(1)
 
-        # 返回
-        self.d.press("back")
-        time.sleep(1)
-
-        return {
-            'success': success,
-            'msg': msg,
-            'stock_name': stock_name.replace(" ", ""),
-            'amount': amount,
-            'price': price,
-            'type': action_cn
-        }
+            return {
+                'success': success,
+                'msg': msg,
+                'stock_name': stock_name.replace(" ", ""),
+                'amount': amount,
+                'price': price,
+                'type': action_cn
+            }
+        except Exception as e:
+            print(f"🔥 交易过程发生异常: {str(e)}")
+            self._log_screen("error_snapshot")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'msg': f"异常: {str(e)}",
+                'stock_name': "",
+                'amount': amount,
+                'price': price,
+                'type': "error"
+            }
 
     def _input_stock_code(self, stock_code):
         """输入股票代码"""
@@ -585,29 +656,6 @@ class THSTrader:
         for line in result:
             text += line[1]
         return text
-
-    def _ocr_parse_holding(self, path):
-        """OCR 解析持仓信息"""
-        if not self.reader:
-            return {}
-
-        Image.open(path).crop((11, 11, 165, 55)).save("tmp.png")
-        result = self._ocr_read("tmp.png")
-        stock_name = result[0][1] if result else "未知"
-
-        Image.open(path).crop((419, 11, 548, 55)).save("tmp.png")
-        result = self._ocr_read("tmp.png")
-        stock_count = result[0][1] if result else "0"
-
-        Image.open(path).crop((419, 60, 548, 102)).save("tmp.png")
-        result = self._ocr_read("tmp.png")
-        stock_available = result[0][1] if result else "0"
-
-        return {
-            "股票名称": stock_name.replace(" ", ""),
-            "股票余额": int(stock_count.replace(",", "")),
-            "可用余额": int(stock_available.replace(",", ""))
-        }
 
     def _ocr_parse_withdrawal(self, path):
         """OCR 解析撤单信息"""
