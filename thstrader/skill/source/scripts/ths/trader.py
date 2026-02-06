@@ -312,19 +312,53 @@ class THSTrader:
 
     def _close_dialogs(self):
         """关闭可能的对话框"""
-        try:
-            if self.d(text="等待").exists(timeout=1):
-                self.d(text="等待").click()
-                time.sleep(0.5)
-        except:
-            pass
+        # 1. 尝试点击常见的文本关闭/取消按钮
+        texts = ["等待", "关闭", "以后再说", "我知道了", "不再提醒", "确定", "取消", "跳过"]
+        for t in texts:
+            try:
+                if self.d(text=t).exists(timeout=0.2):
+                    print(f"检测到弹窗文本: {t}")
+                    self.d(text=t).click()
+                    time.sleep(0.5)
+            except:
+                pass
 
+        # 2. 尝试点击常见的图标关闭按钮 (通过 content-desc)
+        descs = ["关闭", "close", "取消"]
+        for d in descs:
+            try:
+                if self.d(description=d).exists(timeout=0.2):
+                    print(f"检测到关闭图标: {d}")
+                    self.d(description=d).click()
+                    time.sleep(0.5)
+            except:
+                pass
+
+        # 3. 尝试点击配置中的关闭按钮 ID
         try:
-            if self.d(resourceId=UI_ELEMENTS["close_btn"]).exists(timeout=1):
+            if self.d(resourceId=UI_ELEMENTS["close_btn"]).exists(timeout=0.2):
                 self.d(resourceId=UI_ELEMENTS["close_btn"]).click()
                 time.sleep(0.5)
         except:
             pass
+        
+        # 4. 尝试点击可能的广告关闭按钮 (常见 ID 列表)
+        ad_close_ids = [
+            "com.hexin.plat.android:id/iv_close",
+            "com.hexin.plat.android:id/img_close",
+            "com.hexin.plat.android:id/close_img",
+            "com.hexin.plat.android:id/dialog_close",
+            "com.hexin.plat.android:id/btn_close",
+            "com.hexin.plat.android:id/close"
+        ]
+        for rid in ad_close_ids:
+            try:
+                if self.d(resourceId=rid).exists(timeout=0.1):
+                    # print(f"检测到广告关闭按钮: {rid}")
+                    self.d(resourceId=rid).click()
+                    time.sleep(0.5)
+            except:
+                pass
 
     def _trade_action(self, stock_code, amount, price, action="buy"):
         """
