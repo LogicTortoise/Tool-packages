@@ -14,7 +14,7 @@ import { existsSync } from 'fs';
 import os from 'os';
 
 // ── Config ──────────────────────────────────────────────────────────
-const USER_DATA_DIR = process.env.XHS_USER_DATA_DIR || path.join(os.homedir(), '.xhs-playwright-data');
+const USER_DATA_DIR = process.env.XHS_USER_DATA_DIR || path.join(os.homedir(), '.xhs-browser-data');
 const PUBLISH_URL = 'https://creator.xiaohongshu.com/publish/publish';
 const LOGIN_URL_FRAGMENT = '/login';
 const VIEWPORT = { width: 1400, height: 900 };
@@ -109,7 +109,7 @@ async function main() {
     // Step 2: Check login status
     if (page.url().includes(LOGIN_URL_FRAGMENT)) {
       log('Not logged in. Switching to QR code login...');
-      // Click QR toggle
+      // Click QR toggle to show QR code
       await page.evaluate(() => {
         const imgs = document.querySelectorAll('img');
         for (const img of imgs) {
@@ -118,14 +118,29 @@ async function main() {
       });
       await waitAndCheck(page, 1000);
 
-      log('Please scan the QR code with Xiaohongshu APP to login...');
+      log('========================================');
+      log('Please scan the QR code in the browser window with Xiaohongshu APP.');
+      log('Waiting up to 120 seconds...');
+      log('========================================');
+
       // Wait for navigation away from login page (max 120s)
-      await page.waitForURL(url => !url.toString().includes(LOGIN_URL_FRAGMENT), { timeout: 120000 });
-      log('Login successful!');
+      try {
+        await page.waitForFunction(
+          () => !window.location.href.includes('/login'),
+          { timeout: 120000, polling: 1000 }
+        );
+      } catch {
+        log('Login timed out. Please try again.');
+        await context.close();
+        process.exit(1);
+      }
+      log('Login successful! Session saved.');
 
       // Re-navigate to publish page after login
       await page.goto(PUBLISH_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await waitAndCheck(page, 3000);
+    } else {
+      log('Already logged in (session restored).');
     }
 
     // Step 3: Switch to "上传图文" (Image/Text) tab
@@ -145,13 +160,16 @@ async function main() {
     // Trigger file chooser and upload
     const [fileChooser] = await Promise.all([
       page.waitForEvent('filechooser', { timeout: 10000 }),
-      page.evaluate(() => {
-        const btn = document.querySelector('button');
-        if (btn) btn.click();
-        // Also try clicking the upload area
-        const uploadArea = document.querySelector('[class*="upload"]');
-        if (uploadArea) uploadArea.click();
-      }),
+      page.locator('button:has-text("上传图片"), [class*="upload-wrapper"], [class*="upload-input"]')
+        .first().click({ timeout: 5000 })
+        .catch(() => page.evaluate(() => {
+          // Fallback: find and click any upload-related element
+          const el = document.querySelector('input[type="file"]');
+          if (el) { el.click(); return; }
+          document.querySelectorAll('button').forEach(b => {
+            if (b.textContent.includes('上传')) b.click();
+          });
+        })),
     ]);
     await fileChooser.setFiles(absolutePaths);
     log('Images uploaded.');
@@ -159,12 +177,10 @@ async function main() {
 
     // Step 5: Close any popups/tooltips
     await page.evaluate(() => {
-      const closeButtons = document.querySelectorAll('[class*="close"], [class*="dismiss"]');
-      closeButtons.forEach(b => b.click());
-      // Close popover arrows
-      const arrows = document.querySelectorAll('[class*="popover"] svg, [class*="arrow"] svg');
-      arrows.forEach(a => a.click());
-    });
+      document.querySelectorAll('[class*="close"], [class*="dismiss"], [class*="popover"] svg').forEach(el => {
+        if (typeof el.click === 'function') el.click();
+      });
+    }).catch(() => {});
     await waitAndCheck(page, 500);
 
     // Step 6: Fill title
