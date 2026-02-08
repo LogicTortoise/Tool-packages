@@ -1,43 +1,55 @@
 # Tool Packages
 
-个人工具包集合，包含各类自动化工具的 Claude Code Skills 和开发代码。
+个人工具包集合，包含各类自动化工具的 AgentSkills 和开发代码。
 
 ## 仓库结构
 
 ```
 Tool-packages/
 ├── README.md                    # 本文档
-└── <tool-name>/                 # 工具名称目录
-    ├── skill/                   # Claude Code Skill 文件
-    │   ├── <tool-name>.skill    # 打包的 skill 文件
-    │   └── source/              # skill 源代码（可选）
-    │       ├── SKILL.md
-    │       ├── scripts/
-    │       └── references/
-    └── development/             # 开发和测试代码
-        ├── README.md            # 工具说明文档
-        ├── requirements.txt     # Python 依赖
-        ├── test_*.py            # 测试脚本
-        └── ...                  # 其他开发文件
+└── <tool-name>/                 # 工具名称目录（也是 skill 目录）
+    ├── SKILL.md                 # Skill 定义（OpenClaw/AgentSkills 格式）
+    ├── scripts/                 # Skill 脚本（可选）
+    ├── references/              # Skill 参考文档（可选）
+    ├── skill/                   # 打包文件（可选）
+    │   └── <tool-name>.skill    # 打包的 .skill 文件
+    └── development/             # 开发和测试代码（可选）
+        ├── README.md
+        ├── requirements.txt
+        └── ...
 ```
+
+**关键**: `SKILL.md` 必须在工具根目录下，OpenClaw 通过 `extraDirs` 扫描时才能识别。
+
+## OpenClaw 集成
+
+本仓库通过 `skills.load.extraDirs` 配置自动加载到 OpenClaw：
+
+```json
+"skills": {
+  "load": {
+    "extraDirs": ["/Users/Hht/Documents/10.github/Tool-packages"]
+  }
+}
+```
+
+新增 skill 只需在本仓库下创建目录并放入 `SKILL.md`，OpenClaw 会自动发现。
 
 ## 目录说明
 
+### 根目录文件（Skill 定义）
+
+- **`SKILL.md`**: Skill 定义文件（YAML frontmatter + Markdown 指令），必须在工具根目录
+- **`scripts/`**: Skill 使用的可执行脚本
+- **`references/`**: 参考文档，按需加载到上下文
+
 ### skill/ 目录
 
-存放 Claude Code Skill 相关文件：
-
-- **`<tool-name>.skill`**: 打包好的 skill 文件，可直接安装使用
-- **`source/`**: skill 的源代码（可选），用于维护和更新 skill
+- **`<tool-name>.skill`**: 打包好的 .skill 文件，用于分发
 
 ### development/ 目录
 
-存放工具的开发代码和测试文件：
-
-- 完整的项目源代码
-- 测试脚本和测试报告
-- 开发文档
-- 依赖配置文件
+存放工具的开发代码和测试文件
 
 ## 工具列表
 
@@ -45,7 +57,7 @@ Tool-packages/
 
 **功能**: 通过 Android 模拟器自动化操控同花顺 APP 进行模拟炒股
 
-**Skill 位置**: `thstrader/skill/thstrader.skill`
+**Skill**: `thstrader/SKILL.md`
 
 **开发代码**: `thstrader/development/`
 
@@ -69,9 +81,7 @@ Tool-packages/
 
 **功能**: 下载 Bilibili 视频并使用 faster-whisper 转录为高质量中文文本
 
-**Skill 位置**: `bilibili-to-text/skill/bilibili-to-text.skill`
-
-**源代码**: `bilibili-to-text/skill/source/`
+**Skill**: `bilibili-to-text/SKILL.md`
 
 **主要功能**:
 - 自动下载 Bilibili 视频（支持 b23.tv 短链接）
@@ -94,59 +104,21 @@ Tool-packages/
 
 ## 使用指南
 
-### 安装 Skill
-
-```bash
-# 方法 1: 直接安装 .skill 文件
-claude-code skill install <tool-name>/skill/<tool-name>.skill
-
-# 方法 2: 从源代码打包（需要 skill-creator）
-cd <tool-name>/skill/source
-# 使用 skill-creator 打包
-```
-
-### 使用开发代码
-
-```bash
-# 进入开发目录
-cd <tool-name>/development
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 查看使用说明
-cat README.md
-
-# 运行测试
-python test_*.py
-```
-
-## 维护说明
-
 ### 添加新工具
 
-1. 创建工具目录：
+1. 创建工具目录并放入 `SKILL.md`：
    ```bash
-   mkdir -p <tool-name>/skill <tool-name>/development
+   mkdir <tool-name>
+   # 编写 SKILL.md（YAML frontmatter + 指令）
    ```
 
-2. 放置 skill 文件到 `<tool-name>/skill/`
+2. OpenClaw 自动通过 `extraDirs` 发现新 skill
 
-3. 放置开发代码到 `<tool-name>/development/`
-
-4. 更新本 README 的"工具列表"部分
+3. 如需环境变量，在 `~/.openclaw/openclaw.json` 的 `skills.entries` 中添加配置
 
 ### 更新现有工具
 
-1. **更新 Skill**:
-   - 修改 `<tool-name>/skill/source/` 中的源代码
-   - 重新打包生成新的 `.skill` 文件
-   - 替换 `<tool-name>/skill/<tool-name>.skill`
-
-2. **更新开发代码**:
-   - 直接修改 `<tool-name>/development/` 中的文件
-   - 运行测试确保功能正常
-   - 更新 README 和测试报告
+直接修改 `<tool-name>/SKILL.md` 和对应的 `scripts/`、`references/`，OpenClaw watcher 会自动刷新
 
 ## Git 提交规范
 

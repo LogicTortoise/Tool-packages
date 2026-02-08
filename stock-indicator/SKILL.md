@@ -1,20 +1,32 @@
-<skill>
-  <name>stock-indicator</name>
-  <description>Query stock indicators (KDJ, MACD) for a given A-share symbol using AkShare and Pandas-TA.
-  Usage: stock_indicator {symbol} [days]
-  Example: stock_indicator 000001 5
-  </description>
-  <tools>
-    <tool>
-      <name>stock_indicator</name>
-      <description>Get technical indicators (KDJ, MACD) for a stock symbol.</description>
-      <parameters>
-        <parameter name="symbol" type="string" required="true" description="Stock symbol (e.g., 000001, 600519)" />
-        <parameter name="days" type="number" required="false" description="Number of recent days to return (default: 5)" />
-      </parameters>
-      <run>
-        <cmd>/Users/Hht/agent-venv/bin/python /Users/Hht/.nvm/versions/node/v22.19.0/lib/node_modules/clawdbot/skills/stock-indicator/indicator.py ${symbol} --days ${days:-5}</cmd>
-      </run>
-    </tool>
-  </tools>
-</skill>
+---
+name: stock-indicator
+description: "Query A-share stock technical indicators (KDJ, MACD) using AkShare and Pandas-TA. Use when the user asks about stock indicators, technical analysis, KDJ, MACD, or wants to check stock signals for A-share symbols. Example: 'stock_indicator 000001 5'."
+---
+
+# Stock Indicator
+
+Query KDJ and MACD technical indicators for A-share stocks.
+
+## Prerequisites
+
+- Python virtual environment at `~/agent-venv` with `akshare`, `pandas_ta`, `pandas` installed
+
+## Usage
+
+```bash
+~/agent-venv/bin/python {baseDir}/indicator.py <symbol> [--days N]
+```
+
+### Examples
+
+```bash
+# Query last 5 days of indicators for 平安银行 (000001)
+~/agent-venv/bin/python {baseDir}/indicator.py 000001 --days 5
+
+# Query last 10 days for 贵州茅台 (600519)
+~/agent-venv/bin/python {baseDir}/indicator.py 600519 --days 10
+```
+
+## Output
+
+JSON array with daily records containing: Date, Open, Close, High, Low, Volume, K_9_3, D_9_3, J_9_3, MACD, MACDh, MACDs.
